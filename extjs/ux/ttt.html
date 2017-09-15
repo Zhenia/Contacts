@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<!-- saved from url=(0062)https://docs.sencha.com/extjs/4.1.2/source/FiltersFeature.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <title>The source code</title>
+  <link href="./ttt_files/prettify.css" type="text/css" rel="stylesheet">
+  <script type="text/javascript" src="./ttt_files/prettify.js.download"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js prettyprinted" style=""><span id="Ext-ux-grid-FiltersFeature"><span class="com">/**
+</span></span><span class="com"> * FiltersFeature is a grid {@link Ext.grid.feature.Feature feature} that allows for a slightly more
+ * robust representation of filtering than what is provided by the default store.
+ *
+ * Filtering is adjusted by the user using the grid's column header menu (this menu can be
+ * disabled through configuration). Through this menu users can configure, enable, and
+ * disable filters for each column.
+ *
+ * #Features#
+ *
+ * ##Filtering implementations:##
+ *
+ * Default filtering for Strings, Numeric Ranges, Date Ranges, Lists (which can be backed by a
+ * {@link Ext.data.Store}), and Boolean. Additional custom filter types and menus are easily
+ * created by extending {@link Ext.ux.grid.filter.Filter}.
+ *
+ * ##Graphical Indicators:##
+ *
+ * Columns that are filtered have {@link #filterCls a configurable css class} applied to the column headers.
+ *
+ * ##Automatic Reconfiguration:##
+ *
+ * Filters automatically reconfigure when the grid 'reconfigure' event fires.
+ *
+ * ##Stateful:##
+ *
+ * Filter information will be persisted across page loads by specifying a `stateId`
+ * in the Grid configuration.
+ *
+ * The filter collection binds to the {@link Ext.grid.Panel#beforestaterestore beforestaterestore}
+ * and {@link Ext.grid.Panel#beforestatesave beforestatesave} events in order to be stateful.
+ *
+ * ##GridPanel Changes:##
+ *
+ * - A `filters` property is added to the GridPanel using this feature.
+ * - A `filterupdate` event is added to the GridPanel and is fired upon onStateChange completion.
+ *
+ * ##Server side code examples:##
+ *
+ * - [PHP](http://www.vinylfox.com/extjs/grid-filter-php-backend-code.php) - (Thanks VinylFox)
+ * - [Ruby on Rails](http://extjs.com/forum/showthread.php?p=77326#post77326) - (Thanks Zyclops)
+ * - [Ruby on Rails](http://extjs.com/forum/showthread.php?p=176596#post176596) - (Thanks Rotomaul)
+ *
+ * #Example usage:#
+ *
+ *     var store = Ext.create('Ext.data.Store', {
+ *         pageSize: 15
+ *         ...
+ *     });
+ *
+ *     var filtersCfg = {
+ *         ftype: 'filters',
+ *         autoReload: false, //don't reload automatically
+ *         local: true, //only filter locally
+ *         // filters may be configured through the plugin,
+ *         // or in the column definition within the headers configuration
+ *         filters: [{
+ *             type: 'numeric',
+ *             dataIndex: 'id'
+ *         }, {
+ *             type: 'string',
+ *             dataIndex: 'name'
+ *         }, {
+ *             type: 'numeric',
+ *             dataIndex: 'price'
+ *         }, {
+ *             type: 'date',
+ *             dataIndex: 'dateAdded'
+ *         }, {
+ *             type: 'list',
+ *             dataIndex: 'size',
+ *             options: ['extra small', 'small', 'medium', 'large', 'extra large'],
+ *             phpMode: true
+ *         }, {
+ *             type: 'boolean',
+ *             dataIndex: 'visible'
+ *         }]
+ *     };
+ *
+ *     var grid = Ext.create('Ext.grid.Panel', {
+ *          store: store,
+ *          columns: ...,
+ *          features: [filtersCfg],
+ *          height: 400,
+ *          width: 700,
+ *          bbar: Ext.create('Ext.PagingToolbar', {
+ *              store: store
+ *          })
+ *     });
+ *
+ *     // a filters property is added to the GridPanel
+ *     grid.filters
+ */</span><span class="pln">
+</span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">define</span><span class="pun">(</span><span class="str">'Ext.ux.grid.FiltersFeature'</span><span class="pun">,</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+    extend</span><span class="pun">:</span><span class="pln"> </span><span class="str">'Ext.grid.feature.Feature'</span><span class="pun">,</span><span class="pln">
+    alias</span><span class="pun">:</span><span class="pln"> </span><span class="str">'feature.filters'</span><span class="pun">,</span><span class="pln">
+    uses</span><span class="pun">:</span><span class="pln"> </span><span class="pun">[</span><span class="pln">
+        </span><span class="str">'Ext.ux.grid.menu.ListMenu'</span><span class="pun">,</span><span class="pln">
+        </span><span class="str">'Ext.ux.grid.menu.RangeMenu'</span><span class="pun">,</span><span class="pln">
+        </span><span class="str">'Ext.ux.grid.filter.BooleanFilter'</span><span class="pun">,</span><span class="pln">
+        </span><span class="str">'Ext.ux.grid.filter.DateFilter'</span><span class="pun">,</span><span class="pln">
+        </span><span class="str">'Ext.ux.grid.filter.ListFilter'</span><span class="pun">,</span><span class="pln">
+        </span><span class="str">'Ext.ux.grid.filter.NumericFilter'</span><span class="pun">,</span><span class="pln">
+        </span><span class="str">'Ext.ux.grid.filter.StringFilter'</span><span class="pln">
+    </span><span class="pun">],</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-autoReload"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {Boolean} autoReload
+     * Defaults to true, reloading the datasource when a filter change happens.
+     * Set this to false to prevent the datastore from being reloaded if there
+     * are changes to the filters.  See &lt;code&gt;{@link #updateBuffer}&lt;/code&gt;.
+     */</span><span class="pln">
+    autoReload </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">true</span><span class="pun">,</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-encode"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {Boolean} encode
+     * Specify true for {@link #buildQuery} to use Ext.util.JSON.encode to
+     * encode the filter query parameter sent with a remote request.
+     * Defaults to false.
+     */</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-filters"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {Array} filters
+     * An Array of filters config objects. Refer to each filter type class for
+     * configuration details specific to each filter type. Filters for Strings,
+     * Numeric Ranges, Date Ranges, Lists, and Boolean are the standard filters
+     * available.
+     */</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-filterCls"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {String} filterCls
+     * The css class to be applied to column headers with active filters.
+     * Defaults to &lt;tt&gt;'ux-filterd-column'&lt;/tt&gt;.
+     */</span><span class="pln">
+    filterCls </span><span class="pun">:</span><span class="pln"> </span><span class="str">'ux-filtered-column'</span><span class="pun">,</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-local"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {Boolean} local
+     * &lt;tt&gt;true&lt;/tt&gt; to use Ext.data.Store filter functions (local filtering)
+     * instead of the default (&lt;tt&gt;false&lt;/tt&gt;) server side filtering.
+     */</span><span class="pln">
+    local </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">false</span><span class="pun">,</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-menuFilterText"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {String} menuFilterText
+     * defaults to &lt;tt&gt;'Filters'&lt;/tt&gt;.
+     */</span><span class="pln">
+    menuFilterText </span><span class="pun">:</span><span class="pln"> </span><span class="str">'Filters'</span><span class="pun">,</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-paramPrefix"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {String} paramPrefix
+     * The url parameter prefix for the filters.
+     * Defaults to &lt;tt&gt;'filter'&lt;/tt&gt;.
+     */</span><span class="pln">
+    paramPrefix </span><span class="pun">:</span><span class="pln"> </span><span class="str">'filter'</span><span class="pun">,</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-showMenu"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {Boolean} showMenu
+     * Defaults to true, including a filter submenu in the default header menu.
+     */</span><span class="pln">
+    showMenu </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">true</span><span class="pun">,</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-stateId"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {String} stateId
+     * Name of the value to be used to store state information.
+     */</span><span class="pln">
+    stateId </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">undefined</span><span class="pun">,</span><span class="pln">
+</span><span id="Ext-ux-grid-FiltersFeature-cfg-updateBuffer"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @cfg {Number} updateBuffer
+     * Number of milliseconds to defer store updates since the last filter change.
+     */</span><span class="pln">
+    updateBuffer </span><span class="pun">:</span><span class="pln"> </span><span class="lit">500</span><span class="pun">,</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-property-hasFeatureEvent"><span class="pln">    </span><span class="com">// doesn't handle grid body events</span><span class="pln">
+</span></span><span class="pln">    hasFeatureEvent</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">false</span><span class="pun">,</span><span class="pln">
+
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-constructor"><span class="pln">    </span><span class="com">/** @private */</span><span class="pln">
+</span></span><span class="pln">    constructor </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">config</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">;</span><span class="pln">
+
+        config </span><span class="pun">=</span><span class="pln"> config </span><span class="pun">||</span><span class="pln"> </span><span class="pun">{};</span><span class="pln">
+        </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">apply</span><span class="pun">(</span><span class="pln">me</span><span class="pun">,</span><span class="pln"> config</span><span class="pun">);</span><span class="pln">
+
+        me</span><span class="pun">.</span><span class="pln">deferredUpdate </span><span class="pun">=</span><span class="pln"> </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">create</span><span class="pun">(</span><span class="str">'Ext.util.DelayedTask'</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">reload</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">);</span><span class="pln">
+
+        </span><span class="com">// Init filters</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">filters </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">createFiltersCollection</span><span class="pun">();</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">filterConfigs </span><span class="pun">=</span><span class="pln"> config</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">;</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-attachEvents"><span class="pln">    attachEvents</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+</span></span><span class="pln">        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+            view </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">view</span><span class="pun">,</span><span class="pln">
+            headerCt </span><span class="pun">=</span><span class="pln"> view</span><span class="pun">.</span><span class="pln">headerCt</span><span class="pun">,</span><span class="pln">
+            grid </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">getGridPanel</span><span class="pun">();</span><span class="pln">
+
+        me</span><span class="pun">.</span><span class="pln">bindStore</span><span class="pun">(</span><span class="pln">view</span><span class="pun">.</span><span class="pln">getStore</span><span class="pun">(),</span><span class="pln"> </span><span class="kwd">true</span><span class="pun">);</span><span class="pln">
+
+        </span><span class="com">// Listen for header menu being created</span><span class="pln">
+        headerCt</span><span class="pun">.</span><span class="pln">on</span><span class="pun">(</span><span class="str">'menucreate'</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">onMenuCreate</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">);</span><span class="pln">
+
+        view</span><span class="pun">.</span><span class="pln">on</span><span class="pun">(</span><span class="str">'refresh'</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">onRefresh</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">);</span><span class="pln">
+        grid</span><span class="pun">.</span><span class="pln">on</span><span class="pun">({</span><span class="pln">
+            scope</span><span class="pun">:</span><span class="pln"> me</span><span class="pun">,</span><span class="pln">
+            beforestaterestore</span><span class="pun">:</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">applyState</span><span class="pun">,</span><span class="pln">
+            beforestatesave</span><span class="pun">:</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">saveState</span><span class="pun">,</span><span class="pln">
+            beforedestroy</span><span class="pun">:</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">destroy
+        </span><span class="pun">});</span><span class="pln">
+
+        </span><span class="com">// Add event and filters shortcut on grid panel</span><span class="pln">
+        grid</span><span class="pun">.</span><span class="pln">filters </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">;</span><span class="pln">
+        grid</span><span class="pun">.</span><span class="pln">addEvents</span><span class="pun">(</span><span class="str">'filterupdate'</span><span class="pun">);</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-createFiltersCollection"><span class="pln">    createFiltersCollection</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+</span></span><span class="pln">        </span><span class="kwd">return</span><span class="pln"> </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">create</span><span class="pun">(</span><span class="str">'Ext.util.MixedCollection'</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">false</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">o</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">return</span><span class="pln"> o </span><span class="pun">?</span><span class="pln"> o</span><span class="pun">.</span><span class="pln">dataIndex </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">null</span><span class="pun">;</span><span class="pln">
+        </span><span class="pun">});</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-createFilters"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private Create the Filter objects for the current configuration, destroying any existing ones first.
+     */</span><span class="pln">
+    createFilters</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+            hadFilters </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">getCount</span><span class="pun">(),</span><span class="pln">
+            grid </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">getGridPanel</span><span class="pun">(),</span><span class="pln">
+            filters </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">createFiltersCollection</span><span class="pun">(),</span><span class="pln">
+            model </span><span class="pun">=</span><span class="pln"> grid</span><span class="pun">.</span><span class="pln">store</span><span class="pun">.</span><span class="pln">model</span><span class="pun">,</span><span class="pln">
+            fields </span><span class="pun">=</span><span class="pln"> model</span><span class="pun">.</span><span class="pln">prototype</span><span class="pun">.</span><span class="pln">fields</span><span class="pun">,</span><span class="pln">
+            field</span><span class="pun">,</span><span class="pln">
+            filter</span><span class="pun">,</span><span class="pln">
+            state</span><span class="pun">;</span><span class="pln">
+
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">hadFilters</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            state </span><span class="pun">=</span><span class="pln"> </span><span class="pun">{};</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">saveState</span><span class="pun">(</span><span class="kwd">null</span><span class="pun">,</span><span class="pln"> state</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+
+        </span><span class="kwd">function</span><span class="pln"> add </span><span class="pun">(</span><span class="pln">dataIndex</span><span class="pun">,</span><span class="pln"> config</span><span class="pun">,</span><span class="pln"> filterable</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">dataIndex </span><span class="pun">&amp;&amp;</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filterable </span><span class="pun">||</span><span class="pln"> config</span><span class="pun">))</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                field </span><span class="pun">=</span><span class="pln"> fields</span><span class="pun">.</span><span class="kwd">get</span><span class="pun">(</span><span class="pln">dataIndex</span><span class="pun">);</span><span class="pln">
+                filter </span><span class="pun">=</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                    dataIndex</span><span class="pun">:</span><span class="pln"> dataIndex</span><span class="pun">,</span><span class="pln">
+                    type</span><span class="pun">:</span><span class="pln"> </span><span class="pun">(</span><span class="pln">field </span><span class="pun">&amp;&amp;</span><span class="pln"> field</span><span class="pun">.</span><span class="pln">type </span><span class="pun">&amp;&amp;</span><span class="pln"> field</span><span class="pun">.</span><span class="pln">type</span><span class="pun">.</span><span class="pln">type</span><span class="pun">)</span><span class="pln"> </span><span class="pun">||</span><span class="pln"> </span><span class="str">'auto'</span><span class="pln">
+                </span><span class="pun">};</span><span class="pln">
+
+                </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">isObject</span><span class="pun">(</span><span class="pln">config</span><span class="pun">))</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                    </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">apply</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">,</span><span class="pln"> config</span><span class="pun">);</span><span class="pln">
+                </span><span class="pun">}</span><span class="pln">
+
+                filters</span><span class="pun">.</span><span class="pln">replace</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+
+        </span><span class="com">// We start with filters from our config</span><span class="pln">
+        </span><span class="typ">Ext</span><span class="pun">.</span><span class="typ">Array</span><span class="pun">.</span><span class="pln">each</span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">filterConfigs</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filterConfig</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            add</span><span class="pun">(</span><span class="pln">filterConfig</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">,</span><span class="pln"> filterConfig</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">});</span><span class="pln">
+
+        </span><span class="com">// Then we merge on filters from the columns in the grid. The columns' filters take precedence.</span><span class="pln">
+        </span><span class="typ">Ext</span><span class="pun">.</span><span class="typ">Array</span><span class="pun">.</span><span class="pln">each</span><span class="pun">(</span><span class="pln">grid</span><span class="pun">.</span><span class="pln">columns</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">column</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">column</span><span class="pun">.</span><span class="pln">filterable </span><span class="pun">===</span><span class="pln"> </span><span class="kwd">false</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                filters</span><span class="pun">.</span><span class="pln">removeAtKey</span><span class="pun">(</span><span class="pln">column</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln"> </span><span class="kwd">else</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                add</span><span class="pun">(</span><span class="pln">column</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">,</span><span class="pln"> column</span><span class="pun">.</span><span class="pln">filter</span><span class="pun">,</span><span class="pln"> column</span><span class="pun">.</span><span class="pln">filterable</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">});</span><span class="pln">
+        
+
+        me</span><span class="pun">.</span><span class="pln">removeAll</span><span class="pun">();</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">items</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">initializeFilters</span><span class="pun">(</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">items</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">hadFilters</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">applyState</span><span class="pun">(</span><span class="kwd">null</span><span class="pun">,</span><span class="pln"> state</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-initializeFilters"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private
+     */</span><span class="pln">
+    initializeFilters</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pun">(</span><span class="pln">filters</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+            filtersLength </span><span class="pun">=</span><span class="pln"> filters</span><span class="pun">.</span><span class="pln">length</span><span class="pun">,</span><span class="pln">
+            i</span><span class="pun">,</span><span class="pln"> filter</span><span class="pun">,</span><span class="pln"> </span><span class="typ">FilterClass</span><span class="pun">;</span><span class="pln">
+
+        </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">i </span><span class="pun">=</span><span class="pln"> </span><span class="lit">0</span><span class="pun">;</span><span class="pln"> i </span><span class="pun">&lt;</span><span class="pln"> filtersLength</span><span class="pun">;</span><span class="pln"> i</span><span class="pun">++)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            filter </span><span class="pun">=</span><span class="pln"> filters</span><span class="pun">[</span><span class="pln">i</span><span class="pun">];</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                </span><span class="typ">FilterClass</span><span class="pln"> </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">getFilterClass</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">type</span><span class="pun">);</span><span class="pln">
+                filter </span><span class="pun">=</span><span class="pln"> filter</span><span class="pun">.</span><span class="pln">menu </span><span class="pun">?</span><span class="pln"> filter </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">new</span><span class="pln"> </span><span class="typ">FilterClass</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">);</span><span class="pln">
+                me</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">add</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">);</span><span class="pln">
+                </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">util</span><span class="pun">.</span><span class="typ">Observable</span><span class="pun">.</span><span class="pln">capture</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">onStateChange</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-onMenuCreate"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private Handle creation of the grid's header menu. Initializes the filters and listens
+     * for the menu being shown.
+     */</span><span class="pln">
+    onMenuCreate</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pun">(</span><span class="pln">headerCt</span><span class="pun">,</span><span class="pln"> menu</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">;</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">createFilters</span><span class="pun">();</span><span class="pln">
+        menu</span><span class="pun">.</span><span class="pln">on</span><span class="pun">(</span><span class="str">'beforeshow'</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">onMenuBeforeShow</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">);</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-onMenuBeforeShow"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private Handle showing of the grid's header menu. Sets up the filter item and menu
+     * appropriate for the target column.
+     */</span><span class="pln">
+    onMenuBeforeShow</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pun">(</span><span class="pln">menu</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+            menuItem</span><span class="pun">,</span><span class="pln"> filter</span><span class="pun">;</span><span class="pln">
+
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">showMenu</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            menuItem </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">menuItem</span><span class="pun">;</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(!</span><span class="pln">menuItem </span><span class="pun">||</span><span class="pln"> menuItem</span><span class="pun">.</span><span class="pln">isDestroyed</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                me</span><span class="pun">.</span><span class="pln">createMenuItem</span><span class="pun">(</span><span class="pln">menu</span><span class="pun">);</span><span class="pln">
+                menuItem </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">menuItem</span><span class="pun">;</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+
+            filter </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">getMenuFilter</span><span class="pun">();</span><span class="pln">
+
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                menuItem</span><span class="pun">.</span><span class="pln">setMenu</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">menu</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">false</span><span class="pun">);</span><span class="pln">
+                menuItem</span><span class="pun">.</span><span class="pln">setChecked</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">active</span><span class="pun">);</span><span class="pln">
+                </span><span class="com">// disable the menu if filter.disabled explicitly set to true</span><span class="pln">
+                menuItem</span><span class="pun">.</span><span class="pln">setDisabled</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">disabled </span><span class="pun">===</span><span class="pln"> </span><span class="kwd">true</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+            menuItem</span><span class="pun">.</span><span class="pln">setVisible</span><span class="pun">(!!</span><span class="pln">filter</span><span class="pun">);</span><span class="pln">
+            </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">sep</span><span class="pun">.</span><span class="pln">setVisible</span><span class="pun">(!!</span><span class="pln">filter</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-createMenuItem"><span class="pln">    createMenuItem</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pun">(</span><span class="pln">menu</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+</span></span><span class="pln">        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">;</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">sep  </span><span class="pun">=</span><span class="pln"> menu</span><span class="pun">.</span><span class="pln">add</span><span class="pun">(</span><span class="str">'-'</span><span class="pun">);</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">menuItem </span><span class="pun">=</span><span class="pln"> menu</span><span class="pun">.</span><span class="pln">add</span><span class="pun">({</span><span class="pln">
+            checked</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">false</span><span class="pun">,</span><span class="pln">
+            itemId</span><span class="pun">:</span><span class="pln"> </span><span class="str">'filters'</span><span class="pun">,</span><span class="pln">
+            text</span><span class="pun">:</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">menuFilterText</span><span class="pun">,</span><span class="pln">
+            listeners</span><span class="pun">:</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                scope</span><span class="pun">:</span><span class="pln"> me</span><span class="pun">,</span><span class="pln">
+                checkchange</span><span class="pun">:</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">onCheckChange</span><span class="pun">,</span><span class="pln">
+                beforecheckchange</span><span class="pun">:</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">onBeforeCheck
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">});</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-getGridPanel"><span class="pln">    getGridPanel</span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+</span></span><span class="pln">        </span><span class="kwd">return</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">view</span><span class="pun">.</span><span class="pln">up</span><span class="pun">(</span><span class="str">'gridpanel'</span><span class="pun">);</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-applyState"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private
+     * Handler for the grid's beforestaterestore event (fires before the state of the
+     * grid is restored).
+     * @param {Object} grid The grid object
+     * @param {Object} state The hash of state values returned from the StateProvider.
+     */</span><span class="pln">
+    applyState </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">grid</span><span class="pun">,</span><span class="pln"> state</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+            key</span><span class="pun">,</span><span class="pln"> filter</span><span class="pun">;</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">applyingState </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">true</span><span class="pun">;</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">clearFilters</span><span class="pun">();</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">state</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">key in state</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">state</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">hasOwnProperty</span><span class="pun">(</span><span class="pln">key</span><span class="pun">))</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                    filter </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="kwd">get</span><span class="pun">(</span><span class="pln">key</span><span class="pun">);</span><span class="pln">
+                    </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                        filter</span><span class="pun">.</span><span class="pln">setValue</span><span class="pun">(</span><span class="pln">state</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">[</span><span class="pln">key</span><span class="pun">]);</span><span class="pln">
+                        filter</span><span class="pun">.</span><span class="pln">setActive</span><span class="pun">(</span><span class="kwd">true</span><span class="pun">);</span><span class="pln">
+                    </span><span class="pun">}</span><span class="pln">
+                </span><span class="pun">}</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">deferredUpdate</span><span class="pun">.</span><span class="pln">cancel</span><span class="pun">();</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">local</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">reload</span><span class="pun">();</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+        </span><span class="kwd">delete</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">applyingState</span><span class="pun">;</span><span class="pln">
+        </span><span class="kwd">delete</span><span class="pln"> state</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">;</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-saveState"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Saves the state of all active filters
+     * @param {Object} grid
+     * @param {Object} state
+     * @return {Boolean}
+     */</span><span class="pln">
+    saveState </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">grid</span><span class="pun">,</span><span class="pln"> state</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> filters </span><span class="pun">=</span><span class="pln"> </span><span class="pun">{};</span><span class="pln">
+        </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">each</span><span class="pun">(</span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">active</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                filters</span><span class="pun">[</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">]</span><span class="pln"> </span><span class="pun">=</span><span class="pln"> filter</span><span class="pun">.</span><span class="pln">getValue</span><span class="pun">();</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">});</span><span class="pln">
+        </span><span class="kwd">return</span><span class="pln"> </span><span class="pun">(</span><span class="pln">state</span><span class="pun">.</span><span class="pln">filters </span><span class="pun">=</span><span class="pln"> filters</span><span class="pun">);</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-destroy"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private
+     * Handler called by the grid 'beforedestroy' event
+     */</span><span class="pln">
+    destroy </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">;</span><span class="pln">
+        </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">destroyMembers</span><span class="pun">(</span><span class="pln">me</span><span class="pun">,</span><span class="pln"> </span><span class="str">'menuItem'</span><span class="pun">,</span><span class="pln"> </span><span class="str">'sep'</span><span class="pun">);</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">removeAll</span><span class="pun">();</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">clearListeners</span><span class="pun">();</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-removeAll"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Remove all filters, permanently destroying them.
+     */</span><span class="pln">
+    removeAll </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pun">(</span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">){</span><span class="pln">
+            </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">destroy</span><span class="pun">.</span><span class="pln">apply</span><span class="pun">(</span><span class="typ">Ext</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">items</span><span class="pun">);</span><span class="pln">
+            </span><span class="com">// remove all items from the collection</span><span class="pln">
+            </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">clear</span><span class="pun">();</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-bindStore"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Changes the data store bound to this view and refreshes it.
+     * @param {Ext.data.Store} store The store to bind to this view
+     */</span><span class="pln">
+    bindStore </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pun">(</span><span class="pln">store</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">;</span><span class="pln">
+
+        </span><span class="com">// Unbind from the old Store</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">store </span><span class="pun">&amp;&amp;</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">storeListeners</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">store</span><span class="pun">.</span><span class="pln">un</span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">storeListeners</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+
+        </span><span class="com">// Set up correct listeners</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">store</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">storeListeners </span><span class="pun">=</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                scope</span><span class="pun">:</span><span class="pln"> me
+            </span><span class="pun">};</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">local</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                me</span><span class="pun">.</span><span class="pln">storeListeners</span><span class="pun">.</span><span class="pln">load </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">onLoad</span><span class="pun">;</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln"> </span><span class="kwd">else</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                me</span><span class="pun">.</span><span class="pln">storeListeners</span><span class="pun">[</span><span class="str">'before'</span><span class="pln"> </span><span class="pun">+</span><span class="pln"> </span><span class="pun">(</span><span class="pln">store</span><span class="pun">.</span><span class="pln">buffered </span><span class="pun">?</span><span class="pln"> </span><span class="str">'prefetch'</span><span class="pln"> </span><span class="pun">:</span><span class="pln"> </span><span class="str">'load'</span><span class="pun">)]</span><span class="pln"> </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">onBeforeLoad</span><span class="pun">;</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+            store</span><span class="pun">.</span><span class="pln">on</span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">storeListeners</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln"> </span><span class="kwd">else</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">delete</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">storeListeners</span><span class="pun">;</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+        me</span><span class="pun">.</span><span class="pln">store </span><span class="pun">=</span><span class="pln"> store</span><span class="pun">;</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-getMenuFilter"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private
+     * Get the filter menu from the filters MixedCollection based on the clicked header
+     */</span><span class="pln">
+    getMenuFilter </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> header </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">view</span><span class="pun">.</span><span class="pln">headerCt</span><span class="pun">.</span><span class="pln">getMenu</span><span class="pun">().</span><span class="pln">activeHeader</span><span class="pun">;</span><span class="pln">
+        </span><span class="kwd">return</span><span class="pln"> header </span><span class="pun">?</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="kwd">get</span><span class="pun">(</span><span class="pln">header</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">)</span><span class="pln"> </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">null</span><span class="pun">;</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-onCheckChange"><span class="pln">    </span><span class="com">/** @private */</span><span class="pln">
+</span></span><span class="pln">    onCheckChange </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">item</span><span class="pun">,</span><span class="pln"> value</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">getMenuFilter</span><span class="pun">().</span><span class="pln">setActive</span><span class="pun">(</span><span class="pln">value</span><span class="pun">);</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-onBeforeCheck"><span class="pln">    </span><span class="com">/** @private */</span><span class="pln">
+</span></span><span class="pln">    onBeforeCheck </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">check</span><span class="pun">,</span><span class="pln"> value</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">return</span><span class="pln"> </span><span class="pun">!</span><span class="pln">value </span><span class="pun">||</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">getMenuFilter</span><span class="pun">().</span><span class="pln">isActivatable</span><span class="pun">();</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-onStateChange"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private
+     * Handler for all events on filters.
+     * @param {String} event Event name
+     * @param {Object} filter Standard signature of the event before the event is fired
+     */</span><span class="pln">
+    onStateChange </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">event</span><span class="pun">,</span><span class="pln"> filter</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">event </span><span class="pun">!==</span><span class="pln"> </span><span class="str">'serialize'</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+                grid </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">getGridPanel</span><span class="pun">();</span><span class="pln">
+
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter </span><span class="pun">==</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">getMenuFilter</span><span class="pun">())</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                me</span><span class="pun">.</span><span class="pln">menuItem</span><span class="pun">.</span><span class="pln">setChecked</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">active</span><span class="pun">,</span><span class="pln"> </span><span class="kwd">false</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">((</span><span class="pln">me</span><span class="pun">.</span><span class="pln">autoReload </span><span class="pun">||</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">local</span><span class="pun">)</span><span class="pln"> </span><span class="pun">&amp;&amp;</span><span class="pln"> </span><span class="pun">!</span><span class="pln">me</span><span class="pun">.</span><span class="pln">applyingState</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                me</span><span class="pun">.</span><span class="pln">deferredUpdate</span><span class="pun">.</span><span class="pln">delay</span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">updateBuffer</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">updateColumnHeadings</span><span class="pun">();</span><span class="pln">
+
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(!</span><span class="pln">me</span><span class="pun">.</span><span class="pln">applyingState</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                grid</span><span class="pun">.</span><span class="pln">saveState</span><span class="pun">();</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+            grid</span><span class="pun">.</span><span class="pln">fireEvent</span><span class="pun">(</span><span class="str">'filterupdate'</span><span class="pun">,</span><span class="pln"> me</span><span class="pun">,</span><span class="pln"> filter</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-onBeforeLoad"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private
+     * Handler for store's beforeload event when configured for remote filtering
+     * @param {Object} store
+     * @param {Object} options
+     */</span><span class="pln">
+    onBeforeLoad </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">store</span><span class="pun">,</span><span class="pln"> options</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        options</span><span class="pun">.</span><span class="pln">params </span><span class="pun">=</span><span class="pln"> options</span><span class="pun">.</span><span class="pln">params </span><span class="pun">||</span><span class="pln"> </span><span class="pun">{};</span><span class="pln">
+        </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">cleanParams</span><span class="pun">(</span><span class="pln">options</span><span class="pun">.</span><span class="pln">params</span><span class="pun">);</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> params </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">buildQuery</span><span class="pun">(</span><span class="kwd">this</span><span class="pun">.</span><span class="pln">getFilterData</span><span class="pun">());</span><span class="pln">
+        </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">apply</span><span class="pun">(</span><span class="pln">options</span><span class="pun">.</span><span class="pln">params</span><span class="pun">,</span><span class="pln"> params</span><span class="pun">);</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-onLoad"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private
+     * Handler for store's load event when configured for local filtering
+     * @param {Object} store
+     */</span><span class="pln">
+    onLoad </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">store</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        store</span><span class="pun">.</span><span class="pln">filterBy</span><span class="pun">(</span><span class="kwd">this</span><span class="pun">.</span><span class="pln">getRecordFilter</span><span class="pun">());</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-onRefresh"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * @private
+     * Handler called when the grid's view is refreshed
+     */</span><span class="pln">
+    onRefresh </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">updateColumnHeadings</span><span class="pun">();</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-updateColumnHeadings"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Update the styles for the header row based on the active filters
+     */</span><span class="pln">
+    updateColumnHeadings </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+            headerCt </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">view</span><span class="pun">.</span><span class="pln">headerCt</span><span class="pun">;</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">headerCt</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            headerCt</span><span class="pun">.</span><span class="pln">items</span><span class="pun">.</span><span class="pln">each</span><span class="pun">(</span><span class="kwd">function</span><span class="pun">(</span><span class="pln">header</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                </span><span class="kwd">var</span><span class="pln"> filter </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">getFilter</span><span class="pun">(</span><span class="pln">header</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">);</span><span class="pln">
+                header</span><span class="pun">[</span><span class="pln">filter </span><span class="pun">&amp;&amp;</span><span class="pln"> filter</span><span class="pun">.</span><span class="pln">active </span><span class="pun">?</span><span class="pln"> </span><span class="str">'addCls'</span><span class="pln"> </span><span class="pun">:</span><span class="pln"> </span><span class="str">'removeCls'</span><span class="pun">](</span><span class="pln">me</span><span class="pun">.</span><span class="pln">filterCls</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">});</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-reload"><span class="pln">    </span><span class="com">/** @private */</span><span class="pln">
+</span></span><span class="pln">    reload </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+            store </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">view</span><span class="pun">.</span><span class="pln">getStore</span><span class="pun">();</span><span class="pln">
+
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">local</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            store</span><span class="pun">.</span><span class="pln">clearFilter</span><span class="pun">(</span><span class="kwd">true</span><span class="pun">);</span><span class="pln">
+            store</span><span class="pun">.</span><span class="pln">filterBy</span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">getRecordFilter</span><span class="pun">());</span><span class="pln">
+            store</span><span class="pun">.</span><span class="pln">sort</span><span class="pun">();</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln"> </span><span class="kwd">else</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">deferredUpdate</span><span class="pun">.</span><span class="pln">cancel</span><span class="pun">();</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">store</span><span class="pun">.</span><span class="pln">buffered</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                store</span><span class="pun">.</span><span class="pln">pageMap</span><span class="pun">.</span><span class="pln">clear</span><span class="pun">();</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+            store</span><span class="pun">.</span><span class="pln">loadPage</span><span class="pun">(</span><span class="lit">1</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-getRecordFilter"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Method factory that generates a record validator for the filters active at the time
+     * of invokation.
+     * @private
+     */</span><span class="pln">
+    getRecordFilter </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> f </span><span class="pun">=</span><span class="pln"> </span><span class="pun">[],</span><span class="pln"> len</span><span class="pun">,</span><span class="pln"> i</span><span class="pun">;</span><span class="pln">
+        </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">each</span><span class="pun">(</span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">active</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                f</span><span class="pun">.</span><span class="pln">push</span><span class="pun">(</span><span class="pln">filter</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">});</span><span class="pln">
+
+        len </span><span class="pun">=</span><span class="pln"> f</span><span class="pun">.</span><span class="pln">length</span><span class="pun">;</span><span class="pln">
+        </span><span class="kwd">return</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">record</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">i </span><span class="pun">=</span><span class="pln"> </span><span class="lit">0</span><span class="pun">;</span><span class="pln"> i </span><span class="pun">&lt;</span><span class="pln"> len</span><span class="pun">;</span><span class="pln"> i</span><span class="pun">++)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(!</span><span class="pln">f</span><span class="pun">[</span><span class="pln">i</span><span class="pun">].</span><span class="pln">validateRecord</span><span class="pun">(</span><span class="pln">record</span><span class="pun">))</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                    </span><span class="kwd">return</span><span class="pln"> </span><span class="kwd">false</span><span class="pun">;</span><span class="pln">
+                </span><span class="pun">}</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+            </span><span class="kwd">return</span><span class="pln"> </span><span class="kwd">true</span><span class="pun">;</span><span class="pln">
+        </span><span class="pun">};</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-addFilter"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Adds a filter to the collection and observes it for state change.
+     * @param {Object/Ext.ux.grid.filter.Filter} config A filter configuration or a filter object.
+     * @return {Ext.ux.grid.filter.Filter} The existing or newly created filter object.
+     */</span><span class="pln">
+    addFilter </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">config</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+            columns </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">getGridPanel</span><span class="pun">().</span><span class="pln">columns</span><span class="pun">,</span><span class="pln">
+            i</span><span class="pun">,</span><span class="pln"> columnsLength</span><span class="pun">,</span><span class="pln"> column</span><span class="pun">,</span><span class="pln"> filtersLength</span><span class="pun">,</span><span class="pln"> filter</span><span class="pun">;</span><span class="pln">
+
+        
+        </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">i </span><span class="pun">=</span><span class="pln"> </span><span class="lit">0</span><span class="pun">,</span><span class="pln"> columnsLength </span><span class="pun">=</span><span class="pln"> columns</span><span class="pun">.</span><span class="pln">length</span><span class="pun">;</span><span class="pln"> i </span><span class="pun">&lt;</span><span class="pln"> columnsLength</span><span class="pun">;</span><span class="pln"> i</span><span class="pun">++)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            column </span><span class="pun">=</span><span class="pln"> columns</span><span class="pun">[</span><span class="pln">i</span><span class="pun">];</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">column</span><span class="pun">.</span><span class="pln">dataIndex </span><span class="pun">===</span><span class="pln"> config</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                column</span><span class="pun">.</span><span class="pln">filter </span><span class="pun">=</span><span class="pln"> config</span><span class="pun">;</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+        
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">me</span><span class="pun">.</span><span class="pln">view</span><span class="pun">.</span><span class="pln">headerCt</span><span class="pun">.</span><span class="pln">menu</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">createFilters</span><span class="pun">();</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln"> </span><span class="kwd">else</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="com">// Call getMenu() to ensure the menu is created, and so, also are the filters. We cannot call</span><span class="pln">
+            </span><span class="com">// createFilters() withouth having a menu because it will cause in a recursion to applyState()</span><span class="pln">
+            </span><span class="com">// that ends up to clear all the filter values. This is likely to happen when we reorder a column</span><span class="pln">
+            </span><span class="com">// and then add a new filter before the menu is recreated.</span><span class="pln">
+            me</span><span class="pun">.</span><span class="pln">view</span><span class="pun">.</span><span class="pln">headerCt</span><span class="pun">.</span><span class="pln">getMenu</span><span class="pun">();</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+        
+        </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">i </span><span class="pun">=</span><span class="pln"> </span><span class="lit">0</span><span class="pun">,</span><span class="pln"> filtersLength </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">items</span><span class="pun">.</span><span class="pln">length</span><span class="pun">;</span><span class="pln"> i </span><span class="pun">&lt;</span><span class="pln"> filtersLength</span><span class="pun">;</span><span class="pln"> i</span><span class="pun">++)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            filter </span><span class="pun">=</span><span class="pln"> me</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">items</span><span class="pun">[</span><span class="pln">i</span><span class="pun">];</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">.</span><span class="pln">dataIndex </span><span class="pun">===</span><span class="pln"> config</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                </span><span class="kwd">return</span><span class="pln"> filter</span><span class="pun">;</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-addFilters"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Adds filters to the collection.
+     * @param {Array} filters An Array of filter configuration objects.
+     */</span><span class="pln">
+    addFilters </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filters</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filters</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">var</span><span class="pln"> me </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">,</span><span class="pln">
+                i</span><span class="pun">,</span><span class="pln"> filtersLength</span><span class="pun">;</span><span class="pln">
+            </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">i </span><span class="pun">=</span><span class="pln"> </span><span class="lit">0</span><span class="pun">,</span><span class="pln"> filtersLength </span><span class="pun">=</span><span class="pln"> filters</span><span class="pun">.</span><span class="pln">length</span><span class="pun">;</span><span class="pln"> i </span><span class="pun">&lt;</span><span class="pln"> filtersLength</span><span class="pun">;</span><span class="pln"> i</span><span class="pun">++)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                me</span><span class="pun">.</span><span class="pln">addFilter</span><span class="pun">(</span><span class="pln">filters</span><span class="pun">[</span><span class="pln">i</span><span class="pun">]);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-getFilter"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Returns a filter for the given dataIndex, if one exists.
+     * @param {String} dataIndex The dataIndex of the desired filter object.
+     * @return {Ext.ux.grid.filter.Filter}
+     */</span><span class="pln">
+    getFilter </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">dataIndex</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">return</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="kwd">get</span><span class="pun">(</span><span class="pln">dataIndex</span><span class="pun">);</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-clearFilters"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Turns all filters off. This does not clear the configuration information
+     * (see {@link #removeAll}).
+     */</span><span class="pln">
+    clearFilters </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">each</span><span class="pun">(</span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filter</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            filter</span><span class="pun">.</span><span class="pln">setActive</span><span class="pun">(</span><span class="kwd">false</span><span class="pun">);</span><span class="pln">
+        </span><span class="pun">});</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-getFilterData"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Returns an Array of the currently active filters.
+     * @return {Array} filters Array of the currently active filters.
+     */</span><span class="pln">
+    getFilterData </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">()</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> filters </span><span class="pun">=</span><span class="pln"> </span><span class="pun">[],</span><span class="pln"> i</span><span class="pun">,</span><span class="pln"> len</span><span class="pun">;</span><span class="pln">
+
+        </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">filters</span><span class="pun">.</span><span class="pln">each</span><span class="pun">(</span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">f</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">f</span><span class="pun">.</span><span class="pln">active</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                </span><span class="kwd">var</span><span class="pln"> d </span><span class="pun">=</span><span class="pln"> </span><span class="pun">[].</span><span class="pln">concat</span><span class="pun">(</span><span class="pln">f</span><span class="pun">.</span><span class="pln">serialize</span><span class="pun">());</span><span class="pln">
+                </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">i </span><span class="pun">=</span><span class="pln"> </span><span class="lit">0</span><span class="pun">,</span><span class="pln"> len </span><span class="pun">=</span><span class="pln"> d</span><span class="pun">.</span><span class="pln">length</span><span class="pun">;</span><span class="pln"> i </span><span class="pun">&lt;</span><span class="pln"> len</span><span class="pun">;</span><span class="pln"> i</span><span class="pun">++)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                    filters</span><span class="pun">.</span><span class="pln">push</span><span class="pun">({</span><span class="pln">
+                        field</span><span class="pun">:</span><span class="pln"> f</span><span class="pun">.</span><span class="pln">dataIndex</span><span class="pun">,</span><span class="pln">
+                        data</span><span class="pun">:</span><span class="pln"> d</span><span class="pun">[</span><span class="pln">i</span><span class="pun">]</span><span class="pln">
+                    </span><span class="pun">});</span><span class="pln">
+                </span><span class="pun">}</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">});</span><span class="pln">
+        </span><span class="kwd">return</span><span class="pln"> filters</span><span class="pun">;</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-buildQuery"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Function to take the active filters data and build it into a query.
+     * The format of the query depends on the {@link #encode} configuration:
+     *
+     *   - `false` (Default) :
+     *     Flatten into query string of the form (assuming &lt;code&gt;{@link #paramPrefix}='filters'&lt;/code&gt;:
+     *
+     *         filters[0][field]="someDataIndex"&amp;
+     *         filters[0][data][comparison]="someValue1"&amp;
+     *         filters[0][data][type]="someValue2"&amp;
+     *         filters[0][data][value]="someValue3"&amp;
+     *
+     *
+     *   - `true` :
+     *     JSON encode the filter data
+     *
+     *         {filters:[{"field":"someDataIndex","comparison":"someValue1","type":"someValue2","value":"someValue3"}]}
+     *
+     * Override this method to customize the format of the filter query for remote requests.
+     *
+     * @param {Array} filters A collection of objects representing active filters and their configuration.
+     * Each element will take the form of {field: dataIndex, data: filterConf}. dataIndex is not assured
+     * to be unique as any one filter may be a composite of more basic filters for the same dataIndex.
+     *
+     * @return {Object} Query keys and values
+     */</span><span class="pln">
+    buildQuery </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">filters</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="kwd">var</span><span class="pln"> p </span><span class="pun">=</span><span class="pln"> </span><span class="pun">{},</span><span class="pln"> i</span><span class="pun">,</span><span class="pln"> f</span><span class="pun">,</span><span class="pln"> root</span><span class="pun">,</span><span class="pln"> dataPrefix</span><span class="pun">,</span><span class="pln"> key</span><span class="pun">,</span><span class="pln"> tmp</span><span class="pun">,</span><span class="pln">
+            len </span><span class="pun">=</span><span class="pln"> filters</span><span class="pun">.</span><span class="pln">length</span><span class="pun">;</span><span class="pln">
+
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(!</span><span class="kwd">this</span><span class="pun">.</span><span class="pln">encode</span><span class="pun">){</span><span class="pln">
+            </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">i </span><span class="pun">=</span><span class="pln"> </span><span class="lit">0</span><span class="pun">;</span><span class="pln"> i </span><span class="pun">&lt;</span><span class="pln"> len</span><span class="pun">;</span><span class="pln"> i</span><span class="pun">++)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                f </span><span class="pun">=</span><span class="pln"> filters</span><span class="pun">[</span><span class="pln">i</span><span class="pun">];</span><span class="pln">
+                root </span><span class="pun">=</span><span class="pln"> </span><span class="pun">[</span><span class="kwd">this</span><span class="pun">.</span><span class="pln">paramPrefix</span><span class="pun">,</span><span class="pln"> </span><span class="str">'['</span><span class="pun">,</span><span class="pln"> i</span><span class="pun">,</span><span class="pln"> </span><span class="str">']'</span><span class="pun">].</span><span class="pln">join</span><span class="pun">(</span><span class="str">''</span><span class="pun">);</span><span class="pln">
+                p</span><span class="pun">[</span><span class="pln">root </span><span class="pun">+</span><span class="pln"> </span><span class="str">'[field]'</span><span class="pun">]</span><span class="pln"> </span><span class="pun">=</span><span class="pln"> f</span><span class="pun">.</span><span class="pln">field</span><span class="pun">;</span><span class="pln">
+
+                dataPrefix </span><span class="pun">=</span><span class="pln"> root </span><span class="pun">+</span><span class="pln"> </span><span class="str">'[data]'</span><span class="pun">;</span><span class="pln">
+                </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">key in f</span><span class="pun">.</span><span class="pln">data</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                    p</span><span class="pun">[[</span><span class="pln">dataPrefix</span><span class="pun">,</span><span class="pln"> </span><span class="str">'['</span><span class="pun">,</span><span class="pln"> key</span><span class="pun">,</span><span class="pln"> </span><span class="str">']'</span><span class="pun">].</span><span class="pln">join</span><span class="pun">(</span><span class="str">''</span><span class="pun">)]</span><span class="pln"> </span><span class="pun">=</span><span class="pln"> f</span><span class="pun">.</span><span class="pln">data</span><span class="pun">[</span><span class="pln">key</span><span class="pun">];</span><span class="pln">
+                </span><span class="pun">}</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln"> </span><span class="kwd">else</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            tmp </span><span class="pun">=</span><span class="pln"> </span><span class="pun">[];</span><span class="pln">
+            </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">i </span><span class="pun">=</span><span class="pln"> </span><span class="lit">0</span><span class="pun">;</span><span class="pln"> i </span><span class="pun">&lt;</span><span class="pln"> len</span><span class="pun">;</span><span class="pln"> i</span><span class="pun">++)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                f </span><span class="pun">=</span><span class="pln"> filters</span><span class="pun">[</span><span class="pln">i</span><span class="pun">];</span><span class="pln">
+                tmp</span><span class="pun">.</span><span class="pln">push</span><span class="pun">(</span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">apply</span><span class="pun">(</span><span class="pln">
+                    </span><span class="pun">{},</span><span class="pln">
+                    </span><span class="pun">{</span><span class="pln">field</span><span class="pun">:</span><span class="pln"> f</span><span class="pun">.</span><span class="pln">field</span><span class="pun">},</span><span class="pln">
+                    f</span><span class="pun">.</span><span class="pln">data
+                </span><span class="pun">));</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+            </span><span class="com">// only build if there is active filter</span><span class="pln">
+            </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">tmp</span><span class="pun">.</span><span class="pln">length </span><span class="pun">&gt;</span><span class="pln"> </span><span class="lit">0</span><span class="pun">){</span><span class="pln">
+                p</span><span class="pun">[</span><span class="kwd">this</span><span class="pun">.</span><span class="pln">paramPrefix</span><span class="pun">]</span><span class="pln"> </span><span class="pun">=</span><span class="pln"> </span><span class="typ">Ext</span><span class="pun">.</span><span class="pln">JSON</span><span class="pun">.</span><span class="pln">encode</span><span class="pun">(</span><span class="pln">tmp</span><span class="pun">);</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+        </span><span class="kwd">return</span><span class="pln"> p</span><span class="pun">;</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-cleanParams"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Removes filter related query parameters from the provided object.
+     * @param {Object} p Query parameters that may contain filter related fields.
+     */</span><span class="pln">
+    cleanParams </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">p</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="com">// if encoding just delete the property</span><span class="pln">
+        </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="kwd">this</span><span class="pun">.</span><span class="pln">encode</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">delete</span><span class="pln"> p</span><span class="pun">[</span><span class="kwd">this</span><span class="pun">.</span><span class="pln">paramPrefix</span><span class="pun">];</span><span class="pln">
+        </span><span class="com">// otherwise scrub the object of filter data</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln"> </span><span class="kwd">else</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">var</span><span class="pln"> regex</span><span class="pun">,</span><span class="pln"> key</span><span class="pun">;</span><span class="pln">
+            regex </span><span class="pun">=</span><span class="pln"> </span><span class="kwd">new</span><span class="pln"> </span><span class="typ">RegExp</span><span class="pun">(</span><span class="str">'^'</span><span class="pln"> </span><span class="pun">+</span><span class="pln"> </span><span class="kwd">this</span><span class="pun">.</span><span class="pln">paramPrefix </span><span class="pun">+</span><span class="pln"> </span><span class="str">'\[[0-9]+\]'</span><span class="pun">);</span><span class="pln">
+            </span><span class="kwd">for</span><span class="pln"> </span><span class="pun">(</span><span class="pln">key in p</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                </span><span class="kwd">if</span><span class="pln"> </span><span class="pun">(</span><span class="pln">regex</span><span class="pun">.</span><span class="pln">test</span><span class="pun">(</span><span class="pln">key</span><span class="pun">))</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+                    </span><span class="kwd">delete</span><span class="pln"> p</span><span class="pun">[</span><span class="pln">key</span><span class="pun">];</span><span class="pln">
+                </span><span class="pun">}</span><span class="pln">
+            </span><span class="pun">}</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+    </span><span class="pun">},</span><span class="pln">
+
+</span><span id="Ext-ux-grid-FiltersFeature-method-getFilterClass"><span class="pln">    </span><span class="com">/**
+</span></span><span class="com">     * Function for locating filter classes, overwrite this with your favorite
+     * loader to provide dynamic filter loading.
+     * @param {String} type The type of filter to load ('Filter' is automatically
+     * appended to the passed type; eg, 'string' becomes 'StringFilter').
+     * @return {Function} The Ext.ux.grid.filter.Class
+     */</span><span class="pln">
+    getFilterClass </span><span class="pun">:</span><span class="pln"> </span><span class="kwd">function</span><span class="pln"> </span><span class="pun">(</span><span class="pln">type</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+        </span><span class="com">// map the supported Ext.data.Field type values into a supported filter</span><span class="pln">
+        </span><span class="kwd">switch</span><span class="pun">(</span><span class="pln">type</span><span class="pun">)</span><span class="pln"> </span><span class="pun">{</span><span class="pln">
+            </span><span class="kwd">case</span><span class="pln"> </span><span class="str">'auto'</span><span class="pun">:</span><span class="pln">
+              type </span><span class="pun">=</span><span class="pln"> </span><span class="str">'string'</span><span class="pun">;</span><span class="pln">
+              </span><span class="kwd">break</span><span class="pun">;</span><span class="pln">
+            </span><span class="kwd">case</span><span class="pln"> </span><span class="str">'int'</span><span class="pun">:</span><span class="pln">
+            </span><span class="kwd">case</span><span class="pln"> </span><span class="str">'float'</span><span class="pun">:</span><span class="pln">
+              type </span><span class="pun">=</span><span class="pln"> </span><span class="str">'numeric'</span><span class="pun">;</span><span class="pln">
+              </span><span class="kwd">break</span><span class="pun">;</span><span class="pln">
+            </span><span class="kwd">case</span><span class="pln"> </span><span class="str">'bool'</span><span class="pun">:</span><span class="pln">
+              type </span><span class="pun">=</span><span class="pln"> </span><span class="str">'boolean'</span><span class="pun">;</span><span class="pln">
+              </span><span class="kwd">break</span><span class="pun">;</span><span class="pln">
+        </span><span class="pun">}</span><span class="pln">
+        </span><span class="kwd">return</span><span class="pln"> </span><span class="typ">Ext</span><span class="pun">.</span><span class="typ">ClassManager</span><span class="pun">.</span><span class="pln">getByAlias</span><span class="pun">(</span><span class="str">'gridfilter.'</span><span class="pln"> </span><span class="pun">+</span><span class="pln"> type</span><span class="pun">);</span><span class="pln">
+    </span><span class="pun">}</span><span class="pln">
+</span><span class="pun">});</span></pre>
+
+
+</body></html>
