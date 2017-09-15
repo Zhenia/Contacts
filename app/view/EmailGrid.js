@@ -67,7 +67,6 @@ Ext.define('ContactsApp.view.EmailGrid', {
             this.store.remove(selection);
         }
     },
-
     onAddClick: function(){
         var rec = new ContactsApp.model.Email({
             email: '',

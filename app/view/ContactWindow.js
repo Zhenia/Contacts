@@ -42,14 +42,12 @@ Ext.define('ContactsApp.view.ContactWindow', {
                         title: 'Телефоны',
                         shrinkWrapDock: true,
                         flex: 1,
-                       // store: Ext.StoreMgr.lookup('PhoneStore'),
                     },
                     {
                         xtype: 'emailgrid',
                         title: 'Email',
                         shrinkWrapDock: true,
                         flex: 1,
-                       // store: Ext.StoreMgr.lookup('EmailStore'),
                     },
 
                 ]

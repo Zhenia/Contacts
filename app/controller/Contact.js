@@ -22,9 +22,8 @@ Ext.define('ContactsApp.controller.Contact', {
                 keyup : this.search
             },
         });
-
-
     },
+    // open window with contact
     editContact: function(grid, record){
         var view = Ext.widget('contactwindow');
         view.setTitle('Редактирование контакта');
@@ -33,6 +32,7 @@ Ext.define('ContactsApp.controller.Contact', {
         view.show();
         view.down('form').loadRecord(record);
     },
+    // open window with new contact
     newContact: function(grid){
         var view = Ext.widget('contactwindow');
         record = new ContactsApp.model.Contact({
@@ -48,6 +48,7 @@ Ext.define('ContactsApp.controller.Contact', {
         var win = button.up('window');
         win.close();
     },
+    // save contact
     updateContact: function(button) {
         var win = button.up('window');
         form   = win.down('form');
@@ -60,15 +61,17 @@ Ext.define('ContactsApp.controller.Contact', {
         Ext.widget('contactgrid').getStore().load();
         win.close();
     },
-
+    // search by grid with contact
     search: function(field) {
         var value = field.getValue().toString();
         var length = field.getValue().toString().length;
+        //if enter more then 2 symbols
         if (0 === length || 2 <= length) {
             if (!this.lastTriggerSearch || this.lastTriggerSearch != value)
                 this.filterContactGrid(field,value);
         }
     },
+    // filter by storeContact for search
     filterContactGrid: function(field,val){
         var store = Ext.widget('contactgrid').getStore();
         store.clearFilter(true);
@@ -85,6 +88,7 @@ Ext.define('ContactsApp.controller.Contact', {
         store.filter(filters);
         this.lastTriggerSearch = val
     },
+     // filter by storePhone for window with contact
     filterPhoneGrid: function(record){
             var store = Ext.widget('phonegrid').getStore();
                     store.clearFilter(true);
@@ -103,6 +107,7 @@ Ext.define('ContactsApp.controller.Contact', {
                     ];
             store.filter(filters);
     },
+     // filter by storeEmail for window with contact
     filterEmailGrid: function(record){
                var store = Ext.widget('emailgrid').getStore();
                         store.clearFilter(true);
